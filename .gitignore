@@ -25,6 +25,7 @@ gradle-app.setting
 .classpath
 
 !gradle/wrapper/gradle-wrapper.jar
+!gradle/wrapper/gradle-wrapper.properties
 
 ### Gradle Patch ###
 # Java heap dump
