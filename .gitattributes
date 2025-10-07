@@ -10,4 +10,5 @@
 # Binary files should be left untouched
 *.jar           binary
 
-gradlew text eol=lf\n
+gradlew text eol=lf
+gradlew.bat text eol=crlf
