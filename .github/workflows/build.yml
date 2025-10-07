@@ -6,12 +6,29 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # 서브모듈 쓰면 켜세요. 아니면 지워도 됩니다.
+          submodules: recursive
+          # LFS를 쓰고 있다면 임시로 true 가능(하지만 wrapper는 LFS 비권장)
+          lfs: true
+
+      - name: Debug list wrapper files
+        run: |
+          echo "PWD: $(pwd)"
+          find . -path "*/gradle/wrapper/gradle-wrapper.jar" -printf "FOUND: %p\n" || true
+          for f in $(find . -path "*/gradle/wrapper/gradle-wrapper.jar"); do
+            echo "---- HEAD of $f ----"
+            head -n 3 "$f" || true
+            echo "---- file type ----"
+            file "$f" || true
+            echo "-------------------"
+          done
 
       - name: Validate Gradle Wrapper
         uses: gradle/wrapper-validation-action@v2
 
       - name: Make gradlew executable
-        run: chmod +x gradlew
+        run: chmod +x gradlew || true
 
       - uses: actions/setup-java@v4
         with:
