@@ -1,15 +1,21 @@
 name: build
 on: [pull_request, push]
 
-
 jobs:
   gradle:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
+
       - uses: gradle/actions/setup-gradle@v3
-      - run: ./gradlew clean test :apps:api:build --no-daemon
+
+      - name: Build API
+        run: ./gradlew clean test :apps:api:build --no-daemon
