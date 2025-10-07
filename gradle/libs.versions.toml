@@ -1,21 +1,35 @@
 [versions]
 spring-boot = "3.5.6"
 spring-deps = "1.1.6"
-kotlin = "2.1.10" # or 2.0.21 if you prefer
+kotlin = "2.1.10"
 jdk = "21"
-jackson = "2.19.2"  # 또는 Boot와 맞추고 싶으면 3.5.x가 쓰는 버전으로
-
-
+jackson = "2.19.2"  # ← 굳이 고정할 필요 없으면 제거 권장(BOOT BOM이 관리)
 
 [libraries]
+# 기존
 jackson-module-kotlin = { module = "com.fasterxml.jackson.module:jackson-module-kotlin", version.ref = "jackson" }
 spring-boot-starter-web = { module = "org.springframework.boot:spring-boot-starter-web" }
 spring-boot-starter-actuator = { module = "org.springframework.boot:spring-boot-starter-actuator" }
 
+# ▶ OAuth2 / Security
+spring-boot-starter-security = { module = "org.springframework.boot:spring-boot-starter-security" }
+spring-boot-starter-oauth2-client = { module = "org.springframework.boot:spring-boot-starter-oauth2-client" }
+spring-security-oauth2-jose = { module = "org.springframework.security:spring-security-oauth2-jose" }
+spring-boot-starter-oauth2-resource-server = { module = "org.springframework.boot:spring-boot-starter-oauth2-resource-server" } # (옵션) JWT 검증 시
+
+[bundles]
+oauth2 = [
+    "spring-boot-starter-security",
+    "spring-boot-starter-oauth2-client",
+    "spring-security-oauth2-jose"
+]
+resourceServer = [
+    "spring-boot-starter-oauth2-resource-server"
+]
 
 [plugins]
 spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }
-spring-deps = { id = "io.spring.dependency-management", version.ref = "spring-deps" }
-kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
-kotlin-spring = { id = "org.jetbrains.kotlin.plugin.spring", version.ref = "kotlin" }
-kotlin-kapt = { id = "org.jetbrains.kotlin.kapt", version.ref = "kotlin" }
+spring-deps  = { id = "io.spring.dependency-management", version.ref = "spring-deps" }
+kotlin-jvm   = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlin-spring= { id = "org.jetbrains.kotlin.plugin.spring", version.ref = "kotlin" }
+kotlin-kapt  = { id = "org.jetbrains.kotlin.kapt", version.ref = "kotlin" }

@@ -6,10 +6,13 @@ plugins {
     alias(libs.plugins.spring.deps)
 }
 
+java { toolchain { languageVersion.set(JavaLanguageVersion.of(libs.versions.jdk.get().toInt())) } }
+
 dependencies {
     implementation(libs.spring.boot.starter.web)
     implementation(libs.spring.boot.starter.actuator)
     implementation(libs.jackson.module.kotlin)
+    implementation(libs.bundles.oauth2)
 
     implementation(project(":libs:common-core"))
     implementation(project(":libs:common-domain"))
