@@ -7,6 +7,7 @@ import com.finsight.domain.user.CodefRegistrationRequest
 import com.finsight.domain.user.User
 import com.finsight.infra.codef.CodefClient
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.security.core.Authentication
 import org.springframework.security.oauth2.core.user.OAuth2User
 import org.springframework.stereotype.Service
@@ -16,8 +17,8 @@ import java.util.concurrent.ConcurrentHashMap
 
 @Service
 class UserService(
-    private val codefClient: CodefClient,
-    private val tokenService: CodefTokenService,
+    @Autowired(required = false) private val codefClient: CodefClient?,
+    @Autowired(required = false) private val tokenService: CodefTokenService?,
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
 
@@ -64,6 +65,8 @@ class UserService(
         userId: String,
         request: CodefRegistrationRequest
     ): CodefConnectedIdResponse {
+        requireCodefEnabled()
+
         val user = userStore.values.find { it.id == userId }
             ?: throw IllegalArgumentException("User not found: $userId")
 
@@ -72,8 +75,8 @@ class UserService(
         }
 
         // CODEF API 호출
-        val token = tokenService.getValidToken()
-        val response = codefClient.createConnectedId(token, request)
+        val token = tokenService!!.getValidToken()
+        val response = codefClient!!.createConnectedId(token, request)
 
         // ConnectedId 저장
         val updatedUser = user.copy(
@@ -90,13 +93,31 @@ class UserService(
      * 사용자 계좌 목록 조회
      */
     fun getUserAccounts(userId: String): List<Map<String, Any>> {
+        requireCodefEnabled()
+
         val user = userStore.values.find { it.id == userId }
             ?: throw IllegalArgumentException("User not found: $userId")
 
         val connectedId = user.codefConnectedId
             ?: throw IllegalStateException("User has no CODEF connection")
 
-        val token = tokenService.getValidToken()
-        return codefClient.getAccounts(token, connectedId)
+        val token = tokenService!!.getValidToken()
+        return codefClient!!.getAccounts(token, connectedId)
     }
+
+    /**
+     * CODEF가 활성화되어 있는지 확인
+     */
+    private fun requireCodefEnabled() {
+        if (codefClient == null || tokenService == null) {
+            throw IllegalStateException(
+                "CODEF is not enabled. Set codef.enabled=true and provide credentials."
+            )
+        }
+    }
+
+    /**
+     * CODEF 사용 가능 여부 확인
+     */
+    fun isCodefEnabled(): Boolean = codefClient != null && tokenService != null
 }

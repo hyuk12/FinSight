@@ -1,0 +1,17 @@
+spring:
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: test-client-id
+            client-secret: test-client-secret
+            scope: [ "openid","profile","email" ]
+
+# 테스트 환경에서는 CODEF 비활성화
+codef:
+  enabled: false
+
+logging:
+  level:
+    com.finsight: DEBUG

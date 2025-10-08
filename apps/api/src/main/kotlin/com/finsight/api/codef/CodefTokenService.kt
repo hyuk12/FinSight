@@ -3,12 +3,22 @@ package com.finsight.api.codef
 import com.finsight.domain.codef.CodefToken
 import com.finsight.infra.codef.CodefClient
 import org.slf4j.LoggerFactory
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
 import org.springframework.stereotype.Service
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kotlin.concurrent.read
 import kotlin.concurrent.write
 
+/**
+ * CODEF 토큰 관리 서비스
+ * - 토큰 캐싱
+ * - 만료 시 자동 갱신
+ * - Thread-safe
+ *
+ * CodefClient가 있을 때만 생성됨
+ */
 @Service
+@ConditionalOnBean(CodefClient::class)
 class CodefTokenService(
     private val codefClient: CodefClient
 ) {
