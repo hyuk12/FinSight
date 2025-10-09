@@ -54,19 +54,60 @@ AI 모델을 통해 **미래 소비 패턴을 예측**하는 백엔드 중심 �
 ## 📁 디렉토리 구조 예시
 
 ```
-finsight/
-├── src/
-│ ├── main/
-│ │ ├── kotlin/com/finsight/
-│ │ │ ├── controller/
-│ │ │ ├── service/
-│ │ │ ├── domain/
-│ │ │ ├── repository/
-│ │ │ └── config/
-│ │ └── resources/
-│ │ └── application.yml
-│ └── test/
-├── build.gradle.kts
+FinSight/
+├── apps/
+│   └── api/                           # Spring Boot API 서버
+│       ├── src/main/
+│       │   ├── kotlin/com/finsight/api/
+│       │   │   ├── account/          # 계좌 API
+│       │   │   │   └── AccountController.kt
+│       │   │   ├── codef/            # CODEF 토큰 관리
+│       │   │   │   └── CodefTokenService.kt
+│       │   │   ├── config/           # 설정 (Security, Beans)
+│       │   │   │   ├── AppBeans.kt
+│       │   │   │   └── SecurityConfig.kt
+│       │   │   ├── forecast/         # AI 예측 API
+│       │   │   │   └── ForecastController.kt
+│       │   │   ├── user/             # 사용자 & OAuth2
+│       │   │   │   ├── UserController.kt
+│       │   │   │   └── UserService.kt
+│       │   │   └── ApiApplication.kt
+│       │   └── resources/
+│       │       ├── application.yml
+│       │       └── application-test.yml
+│       ├── src/test/
+│       └── build.gradle.kts
+│
+├── libs/
+│   ├── common-core/                   # 공통 유틸리티
+│   │   └── src/main/kotlin/com/finsight/common/
+│   │       └── Logging.kt
+│   ├── common-domain/                 # 도메인 모델
+│   │   └── src/main/kotlin/com/finsight/domain/
+│   │       ├── account/Account.kt
+│   │       ├── codef/Codef.kt
+│   │       ├── forecast/Forecast.kt
+│   │       └── user/User.kt
+│   └── common-infra/                  # 외부 API 클라이언트
+│       └── src/main/kotlin/com/finsight/infra/
+│           ├── codef/CodefClient.kt
+│           └── forecast/ForecastClient.kt
+│
+├── .github/
+│   ├── workflows/build.yml           # CI/CD
+│   ├── ISSUE_TEMPLATE/
+│   └── PULL_REQUEST_TEMPLATE.md
+│
+├── gradle/
+│   └── wrapper/
+├── scripts/
+│   └── bootstrap_repo.ps1            # 저장소 초기화 스크립트
+│
+├── build.gradle.kts                  # Root Gradle 설정
+├── settings.gradle.kts               # 멀티모듈 설정
+├── gradle.properties
+├── gradlew / gradlew.bat
+├── .env.example                      # 환경변수 예시
 └── README.md
 ```
 
