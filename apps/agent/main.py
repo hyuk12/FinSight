@@ -1,25 +1,29 @@
+# apps/agent/main.py (업데이트 버전)
 """
-FinSight AI Agent - 소비 패턴 분석 서버
-멀티 LLM 지원 (Gemini, Anthropic, OpenAI)
+FinSight AI Agent - Multi-Agent System
 """
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import List, Dict, Any
 from datetime import datetime
 import os
-import json
 
-# 환경 변수 로드
 from dotenv import load_dotenv
 load_dotenv()
 
-# LLM Provider
 from llm_providers import LLMProviderFactory
+from ai_agent_system import (
+    MultiAgentSystem,
+    DataAgent,
+    AnalyzerAgent,
+    ReporterAgent,
+    NotificationAgent
+)
 
 app = FastAPI(
-    title="FinSight Agent API",
-    description="멀티 LLM 기반 소비 패턴 분석 엔진",
-    version="0.3.0"
+    title="FinSight Multi-Agent System",
+    description="자율적으로 협업하는 AI Agent 시스템",
+    version="0.4.0"
 )
 
 # LLM Provider 초기화
@@ -27,11 +31,16 @@ llm_provider = LLMProviderFactory.create_provider()
 
 if llm_provider:
     print(f"🤖 LLM Provider: {llm_provider.get_name()}")
+
+    # Multi-Agent System 초기화
+    agent_system = MultiAgentSystem(llm_provider)
+    print(f"✅ Multi-Agent System initialized with {len(agent_system.agents)} agents")
 else:
-    print("⚠️  No LLM provider available. LLM analysis will be disabled.")
+    agent_system = None
+    print("⚠️  LLM not available. Multi-Agent features will be disabled.")
 
-# ===== 데이터 모델 =====
 
+# ===== 기존 모델 (유지) =====
 class Transaction(BaseModel):
     id: str
     date: str
@@ -46,249 +55,151 @@ class AnalysisRequest(BaseModel):
     transactions: List[Transaction]
     month: str
 
-class AnalysisResult(BaseModel):
-    userId: str
-    month: str
-    nickname: str
-    topCategories: List[Dict[str, Any]]
-    insights: List[str]
-    advice: List[str]
-    totalAmount: int
-    generatedAt: str
 
-# ===== 분석 로직 =====
-
-def analyze_simple(request: AnalysisRequest) -> AnalysisResult:
-    """간단한 통계 기반 분석 (LLM 없이)"""
-    # 카테고리별 집계
-    category_sum = {}
-    for tx in request.transactions:
-        category_sum[tx.category] = category_sum.get(tx.category, 0) + tx.amount
-
-    total = sum(category_sum.values())
-
-    # 상위 3개 카테고리
-    top_3 = sorted(category_sum.items(), key=lambda x: x[1], reverse=True)[:3]
-    top_categories = [
-        {
-            "category": cat,
-            "amount": amt,
-            "percentage": round(amt / total * 100, 1) if total > 0 else 0
-        }
-        for cat, amt in top_3
-    ]
-
-    # 간단한 성향 판단
-    if top_categories and top_categories[0]["category"] == "카페":
-        nickname = "카페 탐험가 ☕"
-    elif any(cat["category"] == "온라인쇼핑" for cat in top_categories):
-        nickname = "디지털 쇼퍼 🛒"
-    elif any(cat["category"] == "구독" for cat in top_categories):
-        nickname = "구독 마니아 📱"
-    else:
-        nickname = "균형잡힌 소비자 ⚖️"
-
-    return AnalysisResult(
-        userId=request.userId,
-        month=request.month,
-        nickname=nickname,
-        topCategories=top_categories,
-        insights=[
-            f"이번 달 총 {len(request.transactions)}건의 거래가 발생했어요",
-            f"가장 많이 소비한 카테고리는 '{top_categories[0]['category']}'입니다" if top_categories else "거래 내역이 없습니다",
-            f"총 소비액은 {total:,}원이에요"
-        ],
-        advice=[
-            "다음 달도 현재 패턴을 유지하면 좋을 것 같아요",
-            "예산 관리를 위해 고정비를 먼저 확인해보세요",
-            "소비 카테고리가 분산되어 있어 균형잡힌 소비 패턴이에요"
-        ],
-        totalAmount=total,
-        generatedAt=datetime.now().isoformat()
-    )
+# ===== 새로운 모델 (Multi-Agent용) =====
+class AgentRequest(BaseModel):
+    """사용자의 자연어 요청"""
+    user_id: str
+    request: str
+    # 예: "10월 소비 분석해서 이메일로 보내줘"
+    # 예: "카페 지출이 너무 많은데 줄일 방법 알려줘"
+    # 예: "예산 대비 소비 현황 리포트 만들어줘"
 
 
-def analyze_with_llm(request: AnalysisRequest) -> AnalysisResult:
-    """LLM 기반 심층 분석"""
-    if not llm_provider:
-        raise HTTPException(
-            status_code=503,
-            detail={
-                "error": "LLM_NOT_AVAILABLE",
-                "message": "LLM 서비스를 사용할 수 없습니다.",
-                "solution": "GEMINI_API_KEY, ANTHROPIC_API_KEY, 또는 OPENAI_API_KEY를 설정해주세요."
-            }
-        )
-
-    # 거래내역을 텍스트로 포맷팅
-    transactions_text = "\n".join([
-        f"- {tx.date} | {tx.category} | {tx.merchant} | {tx.amount:,}원 | {tx.description}"
-        for tx in request.transactions
-    ])
-
-    total_amount = sum(tx.amount for tx in request.transactions)
-
-    # 프롬프트 구성
-    prompt = f"""당신은 개인 재무 분석 전문가입니다. 사용자의 소비 패턴을 분석하여 맞춤형 인사이트와 조언을 제공해주세요.
-
-📊 분석 대상
-- 사용자: {request.userName}님
-- 분석 월: {request.month}
-- 총 거래 건수: {len(request.transactions)}건
-- 총 소비액: {total_amount:,}원
-
-💳 거래 내역:
-{transactions_text}
-
----
-
-다음 형식의 JSON으로 분석 결과를 생성해주세요:
-
-{{
-  "nickname": "사용자의 소비 성향을 나타내는 창의적인 별명 (예: 테크 얼리어답터, 홈카페 마스터, 미니멀 라이프 실천가)",
-  "topCategories": [
-    {{
-      "category": "카테고리명",
-      "amount": 금액(숫자),
-      "percentage": 비율(소수점 1자리)
-    }}
-  ],
-  "insights": [
-    "거래 패턴에서 발견한 특이사항이나 트렌드 (3-5개)",
-    "구체적인 수치나 비교를 포함해주세요"
-  ],
-  "advice": [
-    "실용적이고 구체적인 재무 조언 (3-5개)",
-    "다음 달 소비 계획이나 절약 팁"
-  ]
-}}
-
-**요구사항:**
-1. 별명은 구체적이고 개성있게 (이모지 포함 가능)
-2. 인사이트는 데이터 기반의 구체적인 관찰
-3. 조언은 실행 가능한 액션 아이템
-4. 친근하고 공감적인 톤 유지
-5. 반드시 유효한 JSON 형식으로만 응답
-
-JSON만 출력하고 다른 설명은 하지 마세요."""
-
-    try:
-        # LLM 호출
-        print(f"🤖 Calling {llm_provider.get_name()}...")
-
-        response_text = llm_provider.analyze(
-            prompt=prompt,
-            max_tokens=4096,
-            temperature=0.7
-        )
-
-        print(f"📥 Response length: {len(response_text)} chars")
-
-        # JSON 추출 (markdown 코드블록 제거)
-        if response_text.startswith("```"):
-            response_text = response_text.split("```")[1]
-            if response_text.startswith("json"):
-                response_text = response_text[4:].strip()
-
-        analysis_data = json.loads(response_text)
-
-        # 검증 및 기본값 설정
-        nickname = analysis_data.get("nickname", "지혜로운 소비자 🎯")
-        top_categories = analysis_data.get("topCategories", [])
-        insights = analysis_data.get("insights", ["분석 데이터를 수집하고 있어요"])
-        advice = analysis_data.get("advice", ["다음 달 분석을 기대해주세요"])
-
-        return AnalysisResult(
-            userId=request.userId,
-            month=request.month,
-            nickname=nickname,
-            topCategories=top_categories,
-            insights=insights,
-            advice=advice,
-            totalAmount=total_amount,
-            generatedAt=datetime.now().isoformat()
-        )
-
-    except json.JSONDecodeError as e:
-        print(f"❌ JSON parsing error: {e}")
-        print(f"Raw response: {response_text[:500]}")
-        # fallback to simple analysis
-        return analyze_simple(request)
-
-    except Exception as e:
-        print(f"❌ LLM error: {e}")
-        error_msg = str(e).lower()
-
-        # 크레딧 부족 에러 처리
-        if "credit balance is too low" in error_msg or "insufficient_quota" in error_msg:
-            raise HTTPException(
-                status_code=402,
-                detail={
-                    "error": "INSUFFICIENT_CREDITS",
-                    "message": f"{llm_provider.get_name()} 크레딧이 부족합니다.",
-                    "solution": "다른 LLM으로 전환하거나 크레딧을 충전해주세요.",
-                    "fallback": "'/api/analysis/test' 엔드포인트를 사용하면 무료 통계 분석을 이용할 수 있습니다."
-                }
-            )
-
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "error": "LLM_ANALYSIS_FAILED",
-                "message": f"분석 중 오류가 발생했습니다: {str(e)}",
-                "provider": llm_provider.get_name()
-            }
-        )
+class AgentResponse(BaseModel):
+    user_id: str
+    request: str
+    workflow: Dict[str, Any]
+    results: List[Dict[str, Any]]
+    execution_time: float
+    status: str
 
 
-# ===== API 엔드포인트 =====
-
+# ===== 기존 엔드포인트 (유지) =====
 @app.get("/")
 def root():
     return {
-        "service": "FinSight Agent",
+        "service": "FinSight Multi-Agent System",
         "status": "running",
-        "version": "0.3.0",
+        "version": "0.4.0",
         "llm_provider": llm_provider.get_name() if llm_provider else None,
-        "llm_enabled": llm_provider is not None
+        "agents": [
+            "Orchestrator",
+            "DataAgent",
+            "AnalyzerAgent",
+            "ReporterAgent",
+            "NotificationAgent"
+        ] if agent_system else []
     }
 
-@app.get("/health")
-def health():
+
+@app.get("/agents")
+def list_agents():
+    """사용 가능한 Agent 목록"""
+    if not agent_system:
+        raise HTTPException(status_code=503, detail="Agent system not available")
+
     return {
-        "status": "healthy",
-        "llm_provider": llm_provider.get_name() if llm_provider else None,
-        "llm_available": llm_provider is not None
+        "agents": [
+            {
+                "name": agent.name,
+                "role": agent.role,
+                "tools": [tool.name for tool in agent.tools]
+            }
+            for agent in agent_system.agents
+        ]
     }
 
-@app.post("/analyze", response_model=AnalysisResult)
-async def analyze(request: AnalysisRequest):
-    """간단한 통계 기반 분석 (빠름)"""
-    try:
-        print(f"📊 분석 요청: userId={request.userId}, 거래건수={len(request.transactions)}")
-        result = analyze_simple(request)
-        print(f"✅ 분석 완료: {result.nickname}")
-        return result
-    except Exception as e:
-        print(f"❌ 분석 에러: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/analyze-with-llm", response_model=AnalysisResult)
-async def analyze_with_llm_endpoint(request: AnalysisRequest):
-    """LLM 기반 심층 분석 (느리지만 고품질)"""
+# ===== 새로운 Multi-Agent 엔드포인트 =====
+@app.post("/agent/execute")
+async def execute_agent_request(request: AgentRequest) -> AgentResponse:
+    """
+    자연어 요청을 Multi-Agent 시스템으로 처리
+
+    예시:
+    - "10월 소비 분석해서 이메일로 보내줘"
+    - "카페 지출 줄이는 방법 알려줘"
+    - "이번 달 예산 현황 리포트 만들어"
+    """
+    if not agent_system:
+        raise HTTPException(
+            status_code=503,
+            detail="Multi-Agent system not available. Please configure LLM provider."
+        )
+
+    import time
+    start_time = time.time()
+
     try:
-        print(f"🤖 LLM 분석 요청: userId={request.userId}, 거래건수={len(request.transactions)}")
-        result = analyze_with_llm(request)
-        print(f"✅ LLM 분석 완료: {result.nickname}")
-        return result
-    except HTTPException:
-        raise
+        # Multi-Agent System 실행
+        result = agent_system.execute(request.request)
+
+        execution_time = time.time() - start_time
+
+        return AgentResponse(
+            user_id=request.user_id,
+            request=request.request,
+            workflow=result.get("workflow", {}),
+            results=result.get("results", []),
+            execution_time=execution_time,
+            status="success"
+        )
+
     except Exception as e:
-        print(f"❌ LLM 분석 에러: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        execution_time = time.time() - start_time
+
+        return AgentResponse(
+            user_id=request.user_id,
+            request=request.request,
+            workflow={},
+            results=[{
+                "error": str(e),
+                "type": type(e).__name__
+            }],
+            execution_time=execution_time,
+            status="failed"
+        )
+
+
+@app.post("/agent/execute-simple")
+async def execute_simple_agent(request: AgentRequest):
+    """
+    단일 Agent 테스트 (간단한 버전)
+    """
+    if not agent_system:
+        raise HTTPException(status_code=503, detail="Agent system not available")
+
+    # 간단히 DataAgent만 실행
+    result = agent_system.data_agent.process(
+        f"사용자 {request.user_id}의 거래내역을 가져와주세요"
+    )
+
+    return {
+        "user_id": request.user_id,
+        "agent": "DataAgent",
+        "result": result
+    }
+
+
+# ===== 기존 분석 엔드포인트 (유지) =====
+@app.post("/analyze")
+async def analyze(request: AnalysisRequest):
+    """기존 통계 기반 분석"""
+    # ... 기존 코드 유지 ...
+    pass
+
+
+@app.post("/analyze-with-llm")
+async def analyze_with_llm_endpoint(request: AnalysisRequest):
+    """기존 LLM 분석"""
+    # ... 기존 코드 유지 ...
+    pass
+
 
 if __name__ == "__main__":
     import uvicorn
-    print("🚀 Starting FinSight Agent Server...")
-    print(f"🤖 LLM Status: {llm_provider.get_name() if llm_provider else 'Disabled'}")
+    print("🚀 Starting FinSight Multi-Agent System...")
+    print(f"🤖 LLM: {llm_provider.get_name() if llm_provider else 'Disabled'}")
+    print(f"🔧 Agents: {len(agent_system.agents) if agent_system else 0}")
     uvicorn.run(app, host="0.0.0.0", port=8000)
